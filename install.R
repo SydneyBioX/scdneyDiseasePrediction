@@ -11,12 +11,12 @@ install.packages("BiocManager", repos="https://cran.rstudio.com")
 #devtools::install_github("Bioconductor/BiocManager")
 library(BiocManager)
 
-if(BiocManager::version() != "3.16"){
-  BiocManager::install(version="3.16",
+if(BiocManager::version() != "3.17"){
+  BiocManager::install(version="3.17",
                        update=TRUE, ask=FALSE)
 }
 
-for (thispackage in c("ggplot2",  "ggthemes" , "Seurat" , "dplyr" , "devtools")){
+for (thispackage in c("ggplot2", "UpSetR",  "ggthemes" , "Seurat" , "dplyr" , "devtools")){
   if(! thispackage %in% installed.packages() ){
     install.packages(thispackage )
   }
@@ -28,8 +28,13 @@ if (! "scFeatures" %in% installed.packages() ){
 
 
 if (! "ClassifyR" %in% installed.packages() ){
-  if (!require("BiocManager", quietly = TRUE)){
-     install.packages("BiocManager")} 
-  BiocManager::install("ClassifyR")
+  devtools::install_github("DarioS/ClassifyR")
 }
 
+for (thispackage in c("org.Hs.eg.db",  "clusterProfiler")){
+  if (! thispackage %in% installed.packages() ){
+    BiocManager::install(thispackage)
+  }
+}
+
+BiocManager::install()
