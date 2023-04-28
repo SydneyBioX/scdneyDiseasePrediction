@@ -16,14 +16,15 @@ git clone https://github.com/SydneyBioX/scdneyDiseasePrediction /home/gittmp/
 ## wget all data files from Google Cloud Storage into /home/CPC/
 #wget https://storage.googleapis.com/scp_data/data.zip -P /home/gittmp/
 mkdir /home/gittmp/toy_data
-wget https://www.dropbox.com/s/rmfyydm25k1r8oh/Schulte-schrepping_20_severe_20_mild.rds -P /home/gittmp/toy_data
+wget https://www.dropbox.com/s/rw7q7b6h4z669t1/schulte_12patients.rds -P /home/gittmp/toy_data
+wget https://www.dropbox.com/s/os9guj1vur7d39l/wilk_12patient.rds -P /home/gittmp/toy_data
+
 mkdir /home/gittmp/intermediate_result
-wget https://www.dropbox.com/s/jtrbtoh5e80pzn9/scfeatures_result_schulte.rds -P /home/gittmp/intermediate_result
-wget https://www.dropbox.com/s/9sfgpjnxfibuneo/classifyr_result_DLDA.rds -P /home/gittmp/intermediate_result
-wget https://www.dropbox.com/s/7rcvfihnjwbgm34/classifyr_result_SVM.rds -P /home/gittmp/intermediate_result
-wget https://www.dropbox.com/s/pjg8bnhnf7ksvoq/wilk_full.rds -P /home/gittmp/toy_data
-wget https://www.dropbox.com/s/7t646n7cmx2dcf8/scfeatures_result_wilk_full.rds -P /home/gittmp/intermediate_result
+wget https://www.dropbox.com/s/plqxtrudhlsp1n8/scfeatures_result_schulte_12patients.rds -P /home/gittmp/intermediate_result
+wget https://www.dropbox.com/s/z614phwezuz3su6/scfeatures_result_wilk_12patients.rds -P /home/gittmp/intermediate_result
 wget https://www.dropbox.com/s/fphn9b8q5ggdirw/result_list_generalisability.rds -P /home/gittmp/intermediate_result
+wget https://www.dropbox.com/s/qzsnybe3h8l88ta/classifyr_result_naivebayes.rds -P /home/gittmp/intermediate_result
+wget https://www.dropbox.com/s/tt9jc7vkctgqbkq/classifyr_result_knn.rds -P /home/gittmp/intermediate_result
 #wget https://www.dropbox.com/s/91bhx4a2jwj2i63/sce_DentateGyrus_hippocampus.rds -P /home/gittmp/data
 #wget https://www.dropbox.com/sh/tr4wq88nd4y2fy6/AABs-4wcFgAr56Qt5DCKWFLza --content-disposition -P /home/gittmp/
 #mkdir /home/gittmp/output

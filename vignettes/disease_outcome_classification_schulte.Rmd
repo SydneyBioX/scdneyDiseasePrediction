@@ -80,34 +80,19 @@ In this workshop, we will demonstrate our approach for generating a molecular re
 ### 2.1 Load libraries 
 
 First, load all the libraries we will be using in this workshop.    
- 
 ```{r warning=FALSE, message=FALSE}
-for (thispackage in c("ggplot2",  "ggthemes" , "Seurat" , "dplyr" , "devtools",
-                      "RCurl")){
-  if(! thispackage %in% installed.packages() ){
-    install.packages(thispackage )
-  }
-}
-
 library(ggplot2)
+library(plotly)
 library(ggthemes)
 theme_set(theme_bw())
 library(Seurat)
 library(dplyr)
 library(devtools) 
 library(RCurl)
-
-if (! "scFeatures" %in% installed.packages() ){
-  devtools::install_github("SydneyBioX/scFeatures")
-}
+library(UpSetR)
 library(scFeatures)
-
-if (! "ClassifyR" %in% installed.packages() ){
-  if (!require("BiocManager", quietly = TRUE)){
-     install.packages("BiocManager")} 
-  BiocManager::install("ClassifyR")
-}
 library(ClassifyR)
+library(limma)
 
 set.seed(2022)
 ```
@@ -117,14 +102,10 @@ set.seed(2022)
 ### 2.2 Loading the preprocessed data
 
 We will use a single-cell RNA-sequencing (scRNA-seq) data of COVID-19 patients for this workshop. 
-The dataset is taken from [Schulte-Schrepping et al. 2020](https://pubmed.ncbi.nlm.nih.gov/32810438/). We have subsampled 20 mild and 20 severe patient samples from this dataset. The original data can be accessed from the European Genome-phenome Archive (EGA) with the accession number EGAS00001004571.   
+The dataset is taken from [Schulte-Schrepping et al. 2020](https://pubmed.ncbi.nlm.nih.gov/32810438/). We have subsampled 12 patient samples from this dataset, with the condition being mild/moderate and severe/critical. The original data can be accessed from the European Genome-phenome Archive (EGA) with the accession number EGAS00001004571.   
 
 ```{r}
-
-
-download.file(url = "http://www.dropbox.com/s/vhnwch3362dlwr5/Schulte-schrepping_20_severe_20_mild.rds?raw=1" , destfile = "toy_data/Schulte-schrepping_20_severe_20_mild.rds" , method="auto" )
-
-data <-  readRDS("toy_data/Schulte-schrepping_20_severe_20_mild.rds")
+data <-  readRDS("~/toy_data/schulte_12patients.rds")
 ```
 
 
@@ -143,13 +124,13 @@ data <- FindNeighbors(data, dims = 1:10)
 data <- FindClusters(data, resolution = 0.5)
 data  <- RunUMAP(data , dims = 1:10)
 DimPlot(data, reduction = "umap", group.by = "meta_severity")
- 
+
 ```
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <i class="far fa-chart-bar fa-stack-1x fa-inverse"></i>
+<i class="fa fa-circle fa-stack-2x"></i>
+<i class="far fa-chart-bar fa-stack-1x fa-inverse"></i>
 </span> <strong>Interpretation:</strong>
 
 Are the cells from mild/moderate and severe/critical patients easy or difficult to distinguish?
@@ -179,8 +160,8 @@ Inspect the number of cells in each patient sample, as well as the number of cel
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Discussion:</strong>
 
 Is there any sample or cell types you should remove from the data?  
@@ -197,7 +178,7 @@ scFeatures also has a built-in function `process_data`, that removes "small samp
 
 table(data$sample)
 table(data$celltype)
- 
+
 data <- process_data(data)
 
 table(data$sample)
@@ -208,8 +189,8 @@ table(data$celltype)
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Discussion:</strong>
 
 After running the `process_data` function, are there still any patient samples or cell types that you should remove from the data?
@@ -228,11 +209,8 @@ Given that this step may take up to 20 minutes, we have already generated the re
 # Here we label the samples using the severity, such as it is easier later on to retrieve the severity outcomes of the samples. 
 data$sample <- paste0(data$sample, "_cond_" , data$meta_severity)
 
+scfeatures_result <- scFeatures(data, ncores = 12)
 
-scfeatures_result <- scFeatures(data, ncores = 8)
-
-# setwd("intermediate_result/")
-# saveRDS( scfeatures_result , "scfeatures_result_wilk_full.rds")
 ```
 
 
@@ -242,11 +220,7 @@ We have generated a total of 13 feature types and stored them in a list. All gen
 For example, the first list element contains the feature type "proportion_raw", which contains the cell type proportion features for each patient sample. We could print out the first 5 columns and first 5 rows of the first element to see.   
 
 ```{r}
-
-download.file(url = "https://www.dropbox.com/s/volcbtmcz4nlqw4/scfeatures_result_schulte.rds?raw=1" , destfile = "intermediate_result/scfeatures_result_schulte.rds" , method="auto" )
-
-
-scfeatures_result <- readRDS("intermediate_result/scfeatures_result_schulte.rds")
+scfeatures_result <- readRDS("~/intermediate_result/scfeatures_result_schulte_12patients.rds")
 
 # we have generated a total of 13 feature types
 names(scfeatures_result)
@@ -256,11 +230,35 @@ scfeatures_result[[1]][1:5, 1:5]
 ```
 
 
-Once the features are generated, you may wish to visually explore the features. For example, with cell-cell communication, a heatmap summarising the number of interactions between cell types would provide more direct insight than a matrix of interaction scores. 
+Once the features are generated, you may wish to visually explore the features. For example, with cell type specific gene expression score, a volcano plot would provide more direct insight than a matrix of values. 
+
+
+
+```{r}
+data <- scfeatures_result$gene_mean_celltype
+data <- t(data)
+      
+# pick CD14 Mono as an example cell type 
+data <- data[ grep("CD14", rownames(data)), ]
+condition  <- unlist( lapply( strsplit( colnames(data), "_cond_"), `[`, 2))
+condition <- data.frame(condition = condition )
+design <- model.matrix(~condition, data = condition)
+fit <- lmFit(data, design)
+fit <- eBayes(fit)
+tT <- topTable(fit, n = Inf)
+tT$gene <- rownames(tT)
+p <- ggplot( tT , aes(logFC,-log10(P.Value) , text = gene ) )+
+      geom_point(aes(colour=-log10(P.Value)), alpha=1/3, size=1) +
+      scale_colour_gradient(low="blue",high="red")+
+      xlab("log2 fold change") + ylab("-log10 p-value") + theme_minimal()
+ 
+ggplotly(p) 
+```
+
 
 To accommodate for this need, scFeatures contains a function `run_association_study_report` that enables the user to readily visualise and explore all generated features with one line of code.  
 
-Note, because this function knits a rmd file, please open a new R script, paste the command in and run it there. 
+Note, because this function knits a HTML file, please paste the following command in the console and run it there. 
 
 ```{r eval=FALSE}
 # specify a folder to store the html report. Here we store it in the current working directory. 
@@ -275,8 +273,8 @@ run_association_study_report(scfeatures_result, output_folder )
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Discussion:</strong>
 
 Using the HTML, we can look at some of the critical thinking questions that a researcher would ask about the generated features. These questions are exploratory and there is no right or wrong answer.  
@@ -289,8 +287,8 @@ Using the HTML, we can look at some of the critical thinking questions that a re
 </div>
 
 
- 
- 
+
+
 ## 4. How can I perform disease outcome classification using the molecular representation of patients? 
 
 Now that we have generated the patient representation, in this section we will examine a useful case study of using the representation to perform disease outcome classification.  
@@ -320,16 +318,13 @@ outcome = scfeatures_result[[1]] %>% rownames %>% strsplit("_cond_") %>% sapply(
 Recall in the previous section that we have stored the 13 feature types matrix in a list. Instead of retrieving each matrix from the list, classifyR can directly take a list of matrices as an input and run repeated cross-validation model on each matrix individually. 
 
 ```{r eval=FALSE}
-
 classifyr_result = crossValidate(scfeatures_result,
-                            outcome, 
-                            classifier = "DLDA",
-                            nCores = 10 )
-
-# because this can take a while, save for future use
-# saveRDS("intermediate_result/classifyr_result.rds)
+                                 outcome, 
+                                 classifier = "kNN",
+                                 nFolds = 2, 
+                                 nRepeats = 5, 
+                                 nCores = 5 )
 ```
- 
 
 ### 4.2 Visualising the classification performance 
 
@@ -337,11 +332,7 @@ To examine the classification model performance, we first need to specify a metr
 
 ```{r}
 
-
-download.file(url = "https://www.dropbox.com/s/4018lih0qxrgg96/classifyr_result_DLDA.rds?raw=1" , destfile ="intermediate_result/classifyr_result_DLDA.rds" , method="auto" )
-
-
-classifyr_result <- readRDS("intermediate_result/classifyr_result_DLDA.rds")
+classifyr_result <- readRDS("~/intermediate_result/classifyr_result_knn.rds")
 
 classifyr_result <- lapply(classifyr_result, function(x) calcCVperformance(x, performanceType = "Balanced Accuracy"))
 
@@ -357,16 +348,16 @@ colnames(accuracy ) <- unlist( lapply ( strsplit( names(classifyr_result) , "\\.
 
 accuracy <- reshape2::melt(accuracy)
 
-accuracy_DLDA <- ggplot(accuracy, aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy - DLDA")+ ylim(0,1)
+accuracy_knn_balanced_accuracy  <- ggplot(accuracy, aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy")+ ylim(0,1)
 
-accuracy_DLDA
+accuracy_knn_balanced_accuracy
 
 ```
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <i class="far fa-chart-bar fa-stack-1x fa-inverse"></i>
+<i class="fa fa-circle fa-stack-2x"></i>
+<i class="far fa-chart-bar fa-stack-1x fa-inverse"></i>
 </span> <strong>Interpretation:</strong>
 
 Based on the classification performance, which feature type would you like to focus on at your next stage of analysis? 
@@ -378,40 +369,55 @@ Based on the classification performance, which feature type would you like to fo
 
 ### 4.3 What features are important for disease outcome prediction? 
 
-In classifyR, the default settings perform 20 repeats of 5-fold cross-validation, giving rise to a total of 100 models. Therefore, to answer what features are important in the modelling, we first need to examine whether the rankings (or the importance) of each feature in each model are the same.  
+In classifyR, the default settings perform 5 repeats of 2-fold cross-validation. This means for each feature type, we get a total of 10 models. Therefore, to answer what features are important in the modelling, we first need to examine whether the rankings (or the importance) of each feature in each model (within each feature type) are the same.  
 
-We use the feature type "gene_mean_celltype" as an example to illustrate.
-Here, we pick one of the cell type specific genes *CREB3* and look at its ranks across the 100 models. (The smaller the rank, the better. Rank of 1 indicates that the feature is the most important for the model.) 
+To illustrate an example, we use the feature type "gene_mean_celltype" and look at the overlap between the top 20 ranked features in the 10 models. 
 
-```{r fig.height=4, fig.width=3}
 
-gene_mean_celltype <- classifyr_result[["gene_mean_celltype.DLDA.t-test"  ]]
+```{r}
 
-Plasma_CREB3_rank  <- lapply(1:100, function(x){
-    thismodel <- gene_mean_celltype@rankedFeatures[[x]]
-    thismodel$rank <- 1:nrow(thismodel)
-    thismodel["Plasma..CREB3", ]$rank
+# look at the list of models 
+names(classifyr_result)
+
+# pick the fourth model, which is on the feature type gene mean celltype
+gene_mean_celltype <- classifyr_result[[4]]
+
+data_list <- gene_mean_celltype@rankedFeatures
+data_list <- lapply(data_list , function(df) {
+  df[, 2][1:20]
 })
+ 
+names(data_list) <- paste0("Model", 1:10)
+# Create the UpSet plot
+upset_plot <- upset(fromList(data_list), order.by = "freq", nsets = 10)
 
-Plasma_CREB3_rank <- data.frame( rank = unlist(Plasma_CREB3_rank) )
-
-ggplot(Plasma_CREB3_rank, aes( x = "model", y = rank)) + geom_boxplot() 
+# Display the plot
+upset_plot
 ```
 
+<div class="aimbox"> 
+<span class="fa-stack fa-lg">
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
+</span> <strong>Discussion:</strong>
 
-This feature type contains a total of 26076 features. Therefore, although the boxplot shows a certain variability in the ranks of the features, overall it is consistent that the expression of *CREB3* in plasma cells has an important contribution towards the classification model. 
+Based on the upset plot, is the top ranked features consistent? 
 
-This then leads to the next question, how should we determine the final set of top features to focus on? 
+</div>
+
+
+This also leads to the next question, how should we determine the final set of top features to focus on? 
 
 Here, we use the mean scores across the folds to calculate the final set of top features. 
 
 ```{r}
-top_features  <- lapply(1:100, function(x){
-    thismodel <- gene_mean_celltype@rankedFeatures[[x]]
-    thismodel$rank <- 1:nrow(thismodel)
-    thismodel <- thismodel[sort(rownames(thismodel)), ]
-    thismodel$model <- x
-    thismodel
+
+top_features  <- lapply(1:10, function(x){
+  thismodel <- gene_mean_celltype@rankedFeatures[[x]]
+  thismodel$rank <- 1:nrow(thismodel)
+  thismodel <- thismodel[sort(rownames(thismodel)), ]
+  thismodel$model <- x
+  thismodel
 })
 
 top_features <- as.data.frame( do.call(rbind, top_features ) ) 
@@ -419,17 +425,60 @@ top_features <- as.data.frame( do.call(rbind, top_features ) )
 top_features <- top_features %>% group_by(feature) %>% dplyr::summarise(rank = mean(rank)) %>% arrange(rank)
 
 print(head(top_features,10))
- 
+
 ```
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Discussion:</strong>
 
 Further explore the ranks of the features. Which cell type(s) would you like to focus on at your next stage of analysis ? 
+
+</div>
+
+
+
+### 4.4 Is the prediction consistent across the feature types 
+
+Given we build prediction model for each of the feature type, we can examine whether the prediction from each feature type is consistent. 
+
+```{r}
  
+# looking at one repeat 
+data_list <- lapply( 1:13 , function(i) {
+  prediction <- classifyr_result[[i]]@predictions 
+  prediction <- prediction[prediction$permutation == 1, ]$class
+  prediction <- as.data.frame(prediction)
+})
+
+data_list <- do.call( cbind, data_list)
+colnames(data_list)  <- names(classifyr_result)
+ 
+
+ 
+  # count the number of times each row is labeled as "Mild/Moderate"
+counts <- apply(data_list  == "Mild/Moderate", 1, sum)
+  
+# calculate the percentage of times each row is labeled as "Mild/Moderate"
+percentages <- counts / ncol(data_list) * 100
+ 
+consistency <- data.frame(patient = classifyr_result[[1]]@originalNames  , 
+                          percentages_mildmoderate = percentages )
+ 
+consistency
+```
+
+
+<div class="aimbox"> 
+<span class="fa-stack fa-lg">
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
+</span> <strong>Discussion:</strong>
+
+Would ensemble learning using all feature types improve prediction performance compared to using the individual feature type ? 
+
 </div>
 
 
@@ -440,54 +489,63 @@ In this section we take a detailed look at the model performance. In particular,
 
 
 ### 5.1 Do the results change with different classification algorithms?
- 
-classifyR provides an implementation of a number of commonly used classification algorithms. 
- 
+
+classifyR provides an implementation of a number of commonly used classification algorithms, including:  
+- randomForest  
+- DLDA  
+- kNN  
+- GLM 
+- elasticNetGLM 
+- SVM 
+- NSC
+- naiveBayes    
+- mixturesNormals     
+- CoxPH
+- CoxNet    
+- randomSurvivalForest     
+- XGB   
+
 ```{r eval=FALSE}
 
-classifyr_result_svm = crossValidate(scfeatures_result,
-                            outcome, 
-                            classifier = "SVM",
-                            nCores = 20)
+classifyr_result = crossValidate(scfeatures_result,
+                                 outcome, 
+                                 classifier = "naiveBayes",
+                                 nFolds = 2, 
+                                 nRepeats = 5, 
+                                 nCores = 5 )
 
 ```
- 
+
 Compare the accuracy obtained from the different algorithms. 
- 
+
 ```{r}
 
 
 format_accuracy <- function(result_list, performanceType = "Balanced Accuracy"){
   
   result_list <- lapply(result_list, function(x) calcCVperformance(x, performanceType = performanceType ))
-
+  
   accuracy <- lapply(result_list, performance)
   accuracy  <- lapply(accuracy , `[`, performanceType)
   accuracy <- data.frame( accuracy  )
- 
+  
   colnames(accuracy ) <- unlist( lapply ( strsplit( names(result_list) , "\\." ), `[` , 1))
-
+  
   accuracy <- reshape2::melt(accuracy)
   
   return(accuracy)
 }
 
 
-download.file(url = "https://www.dropbox.com/s/43c72sqcxnwnjpi/classifyr_result_SVM.rds?raw=1" , destfile = "intermediate_result/classifyr_result_SVM.rds" , method="auto" )
-
-classifyr_result_SVM <- readRDS("intermediate_result/classifyr_result_SVM.rds")
-
-accuracy_SVM <- format_accuracy(classifyr_result_SVM )
-
-accuracy_SVM <- ggplot(accuracy_SVM, aes(x = variable, y = value )) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy - SVM") + ylim(0,1)
-
-accuracy_SVM
 
 
- # ggplot(accuracy_SVM, aes(x = variable, y = value, colour = variable )) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy - SVM") + scale_colour_tableau("Tableau 20")+ ylim(0,1)
+classifyr_result <- readRDS("~/intermediate_result/classifyr_result_naivebayes.rds")
 
+accuracy <- format_accuracy(classifyr_result  )
 
-# ggsave("accuracy_on_schulte.pdf", width = 16, height = 10, units= "cm")
+accuracy_naivebayes_balanced_accuracy <- ggplot(accuracy , aes(x = variable, y = value )) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy") + ylim(0,1)
+
+accuracy_naivebayes_balanced_accuracy
 
 
 ```
@@ -500,33 +558,36 @@ Here we calculate accuracy instead of balanced accuracy. Inspect the difference 
 ```{r}
 
 
-classifyr_result_accuracy <- lapply(classifyr_result_SVM, function(x) calcCVperformance(x, performanceType = "Accuracy" ))
- 
- 
 
-accuracy_SVM_accuracy <- format_accuracy(classifyr_result_accuracy)
+accuracy <- format_accuracy(classifyr_result , performanceType = "Accuracy")
 
-accuracy_SVM_accuracy  <- ggplot(accuracy_SVM_accuracy , aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy - SVM Accuracy")+ ylim(0,1)
+accuracy_naivebayes_accuracy  <- ggplot(accuracy , aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Accuracy")+ ylim(0,1)
 
-accuracy_SVM_accuracy 
-
-
-
- 
+accuracy_naivebayes_accuracy 
 
 ```
 
- 
+
+Compare the performance on the same plot
+
+
+```{r}
+ggpubr::ggarrange(plotlist = list(accuracy_knn_balanced_accuracy, 
+                                  accuracy_naivebayes_balanced_accuracy,
+                                  accuracy_naivebayes_accuracy), 
+                  ncol=3)
+```
+
+
+
 ### 5.3 Is the model generalisable? 
 
 Generalisable means whether the model can have good performance when tested on an independent dataset.
 
-Here, we use the model built on the Schulte-Schrepping dataset to test on the Wilk dataset. The Wilk data is obtained from  [Wilk et al. 2022](https://rupress.org/jem/article/218/8/e20210582/212379/Multi-omic-profiling-reveals-widespread). It contains 23 mild and 19 severe patients. 
+Here, we use the model built on the Schulte-Schrepping dataset to test on the Wilk dataset. The Wilk data is obtained from  [Wilk et al. 2022](https://rupress.org/jem/article/218/8/e20210582/212379/Multi-omic-profiling-reveals-widespread). We sampled 12 patients with mild/moderate and severe/critical conditions.  
 
 ```{r}
-download.file(url = "https://www.dropbox.com/s/6ecpzf2qrnglayg/wilk_full.rds?raw=1" , destfile = "toy_data/wilk_full.rds" , method="auto" )
- 
-data <- readRDS("toy_data/wilk_full.rds")
+data <- readRDS("~/toy_data/wilk_full.rds")
 ```
 
 
@@ -545,17 +606,32 @@ DimPlot(data, reduction = "umap", group.by = "meta_severity")
 ```
 
 
+```{r eval=FALSE}
+
+# Here we label the samples using the severity, such as it is easier later on to retrieve the severity outcomes of the samples. 
+data$sample <- paste0(data$sample, "_cond_" , data$meta_severity)
+
+
+start <- Sys.time()
+scfeatures_result_wilk <- scFeatures(data, ncores = 12)
+finish <- Sys.time()
+
+scfeatures_result_schulte <- scfeatures_result
+```
+
+
+
+
+
+
 Here we have provided the constructed scFeatures result for the Wilk dataset. 
 
 ```{r}
 
-scfeatures_result_schulte <- readRDS("intermediate_result/scfeatures_result_schulte.rds")
+scfeatures_result_schulte <- readRDS("~/intermediate_result/scfeatures_result_schulte_12patients.rds")
 
-download.file(url = "https://www.dropbox.com/s/wihtyecqmouf22a/scfeatures_result_wilk_full.rds?raw=1" , destfile = "intermediate_result/scfeatures_result_wilk_full.rds" , method="auto" )
 
- 
-
-scfeatures_result_wilk <- readRDS("intermediate_result/scfeatures_result_wilk_full.rds" )
+scfeatures_result_wilk <- readRDS("~/intermediate_result/scfeatures_result_wilk_12patients.rds" )
 
 scfeatures_result_wilk <- scfeatures_result_wilk[ names(scfeatures_result_schulte )]
 
@@ -563,11 +639,11 @@ scfeatures_result_wilk <- scfeatures_result_wilk[ names(scfeatures_result_schult
 # in order to train and test two different datasets, need to make sure the features are the same 
 # pick the common features 
 new_list <- lapply( 1:length(scfeatures_result_schulte), function(i){
-   common_features <- intersect(colnames( scfeatures_result_schulte[[i]]) ,
-             colnames( scfeatures_result_wilk[[i]]))
-   new_schulte <-  scfeatures_result_schulte[[i]][, common_features]
-   new_wilk <- scfeatures_result_wilk[[i]][, common_features]
-   list(new_schulte, new_wilk)
+  common_features <- intersect(colnames( scfeatures_result_schulte[[i]]) ,
+                               colnames( scfeatures_result_wilk[[i]]))
+  new_schulte <-  scfeatures_result_schulte[[i]][, common_features]
+  new_wilk <- scfeatures_result_wilk[[i]][, common_features]
+  list(new_schulte, new_wilk)
 })
 
 # format the features 
@@ -577,10 +653,6 @@ new_scfeatures_result_wilk <- lapply(new_list, `[[`, 2)
 names(new_scfeatures_result_schulte) <- names(scfeatures_result_schulte)
 names(new_scfeatures_result_wilk) <- names(scfeatures_result_wilk)
 
-# First clean the column names
-for(i in 1:length(new_scfeatures_result_schulte)){
-  names(new_scfeatures_result_schulte[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_schulte[[i]]))
-}
 
 # obtain the outcome, which is stored in the rownames of ech matrix 
 outcome_schulte = scfeatures_result_schulte[[1]] %>% rownames %>% strsplit("_cond_") %>% sapply(function(x) x[2])
@@ -588,103 +660,76 @@ outcome_schulte = scfeatures_result_schulte[[1]] %>% rownames %>% strsplit("_con
 outcome_wilk = scfeatures_result_wilk[[1]] %>% rownames %>% strsplit("_cond_") %>% sapply(function(x) x[2])
 names(outcome_wilk) <- rownames(scfeatures_result_wilk[[1]])
 
-# lapply(new_scfeatures_result_schulte, dim)
-# lapply(new_scfeatures_result_wilk, dim)
-
-# remove the feature types that have no common features 
-# new_scfeatures_result_schulte[[6]] <- NULL
-# new_scfeatures_result_wilk[[6]] <- NULL
-
-
 ```
 
 First, we use the dataset from Schulte-Schrepping to perform self cross-validation. The purpose is to identify the best model (the best parameters). Once we decide on the best model, we then use this model to test on the Wilk dataset. 
 
 
-
 ```{r eval=FALSE}
-
-# perform self cross validation
-classifyr_result_svm = crossValidate(new_scfeatures_result_schulte,
-                            outcome_schulte, 
-                            classifier = "SVM",
-                            nCores = 20)
-
-# calculate balanced accuracy 
-
-classifyr_result_svm  <- lapply(classifyr_result_svm, function(x) calcCVperformance(x, performanceType = "Balanced Accuracy" ))
-
-# for each feature type, identify the best model and use the best model to predict on Wilk 
-
-result_generalisability <- NULL
-for( i in c(1:length( classifyr_result_svm )) ){
-  bestmodel <- classifyr_result_svm[[i]]@finalModel[[1]]
-  
-  tuneList <- list(cost =  bestmodel$cost, 
-                   gamma = bestmodel$gamma, 
-                   degree = bestmodel$degree, 
-                   type = bestmodel$type,
-                   tot.nSV= bestmodel$tot.nSV)
-  
-   model <- train(x = new_scfeatures_result_schulte[[i]] ,outcomeTrain = outcome_schulte,
-                  performanceType = "Balanced Accuracy", classifier = "SVM",
-                  tuneParams = tuneList)
-   
-  prediction  <- predict( model , new_scfeatures_result_wilk[[i]])
-  
-  truth <-  outcome_wilk[names(prediction)]
-  temp <- calcExternalPerformance( factor(truth) , prediction, 
-                                      performanceType = c("Balanced Accuracy" )) 
-  temp <- data.frame(balanced_accuracy = temp, 
-                     featuretype = names(new_scfeatures_result_schulte)[[i]] )
-    
-   result_generalisability <- rbind(result_generalisability,   temp)
+# First clean the column names
+for(i in 1:length(new_scfeatures_result_schulte)){
+  names(new_scfeatures_result_schulte[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_schulte[[i]]))
 }
 
-# saveRDS( result_generalisability, "intermediate_result/result_list_generalisability.rds")
+
+# First clean the column names
+for(i in 1:length(new_scfeatures_result_wilk)){
+  names(new_scfeatures_result_wilk[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_wilk[[i]]))
+}
+
  
+# for each feature type, identify the best model and use the best model to predict on Wilk
+result_generalisability <- NULL
+
+for( i in c(1:length( new_scfeatures_result_schulte )) ){
+
+  model <- train(x = new_scfeatures_result_schulte[[i]] ,outcomeTrain = outcome_schulte,
+                 performanceType = "Balanced Accuracy", classifier =  "naiveBayes" )
+  prediction  <- predict( model , new_scfeatures_result_wilk[[i]])
+  truth <-  outcome_wilk[names(prediction)]
+  temp <- calcExternalPerformance( factor(truth) , prediction,
+                                   performanceType = c("Balanced Accuracy"))
+  temp <- data.frame(balanced_accuracy = temp,
+                     featuretype = names(new_scfeatures_result_schulte)[[i]] )
+  result_generalisability <- rbind(result_generalisability,   temp)
+}
 
 ```
- 
- 
+
+
 
 
 Visualise the accuracy using boxplots.  
 
 ```{r}
-download.file(url = "https://www.dropbox.com/s/9fmyvw9z1eh47ps/result_list_generalisability.rds?raw=1" , destfile = "intermediate_result/result_list_generalisability.rds" , method="auto" )
+
+result_list_generalisability <- readRDS("~/intermediate_result/result_list_generalisability.rds")
+
+result_list_generalisability$balanced_accuracy <- round( result_list_generalisability$balanced_accuracy, 2)
 
 
- result_list_generalisability <- readRDS("intermediate_result/result_list_generalisability.rds")
+result_list_generalisability$featuretype <- factor(  result_list_generalisability$featuretype , levels = c( result_list_generalisability$featuretype))
 
- result_list_generalisability$balanced_accuracy <- round( result_list_generalisability$balanced_accuracy, 2)
- 
- 
- result_list_generalisability$featuretype <- factor(  result_list_generalisability$featuretype , levels = c( result_list_generalisability$featuretype))
- 
 ggplot( result_list_generalisability, aes(x = featuretype , y = balanced_accuracy, fill = featuretype ) ) + geom_col()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(0,1) + scale_fill_tableau(palette = "Tableau 20") +
-geom_text(aes(label = balanced_accuracy), vjust = -0.5)
- 
-# ggsave("accuracy_on_wilk.pdf" , width = 16, height = 10, units = "cm")
-
+  geom_text(aes(label = balanced_accuracy), vjust = -0.5)
 
 ```
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Discussion:</strong>
 
 Examine the classification accuracy and comment on the generalisability of the model. 
- 
+
 </div>
 
 
 <div class="aimbox"> 
 <span class="fa-stack fa-lg">
-  <i class="fa fa-circle fa-stack-2x"></i>
-  <span class="far fa-comment fa-stack-1x fa-inverse"></span>
+<i class="fa fa-circle fa-stack-2x"></i>
+<span class="far fa-comment fa-stack-1x fa-inverse"></span>
 </span> <strong>Final discussion:</strong>
 
 How good do you think our model is? What parts of the workflow could you change to improve the results?
@@ -692,64 +737,3 @@ How good do you think our model is? What parts of the workflow could you change 
 </div>
 
 
-
-
-
-<!-- ### Changing the features generated  -->
-
-<!-- In scFeatures, we provide a easy-to-run function where no argument needs to be provided apart from the data itself and the default setting is used for everything. -->
-<!-- For example, with the feature type "gene mean celltype", by default it finds the top 100 variable features (genes) in each cell type for each sample.   -->
-
-<!-- By specifying the argument `celltype_genes` in the `run_gene_mean_celltype` function, the generated features can be set to genes of your interest.  -->
-
-<!-- Using your genes of interest, generate the "gene mean celltype" again and examine the impact on classification performance.  -->
-
-<!-- ```{r} -->
-
-<!-- b_cell <- rownames(data)[1:100] -->
-<!-- neutrophil <- rownames(data)[101:200] -->
-
-<!-- genes_of_interest <- data.frame( marker = c(b_cell, neutrophil),  -->
-<!--                                  celltype = c( rep("B", 100 ) , rep("Neutrophil", 100) ) -->
-<!--                                  ) -->
-
-<!-- customised_gene <- run_gene_mean_celltype( data, genes = genes_of_interest ) -->
-
-
-<!-- ``` -->
-
-<!-- ```{r} -->
-
-<!-- result_list_customised_gene = crossValidate(customised_gene, -->
-<!--                             outcome,  -->
-<!--                             classifier = "SVM", -->
-<!--                             nCores = 10) -->
-
-
-<!-- ``` -->
-
-
-<!-- ### Changing the number of features generated  -->
-
-<!-- With the feature type "gene mean celltype", by default it finds the top 100 variable features (genes) in each cell type for each sample. We can alter the number of feature generated by specifying the `num_top_gene` in the `run_gene_mean_celltype` function.  -->
-
-<!-- By setting to a bigger or smaller number, generate the "gene mean celltype" again and examine the impact on classification performance.  -->
-
-<!-- ```{r} -->
-<!-- customised_number <- run_gene_mean_celltype( data, num_top_gene = 500, ncores = 10 ) -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-
-<!-- result_list_customised_gene = crossValidate(customised_number, -->
-<!--                             outcome,  -->
-<!--                             classifier = "SVM", -->
-<!--                             nCores = 10) -->
-
-<!-- ``` -->
-
-
-
-
- 
