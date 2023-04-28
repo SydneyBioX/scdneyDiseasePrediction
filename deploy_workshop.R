@@ -30,6 +30,8 @@ vm2 <- gce_vm(template = "rstudio",
              user = "rstudio",
              password = "test")
 
+# 32 CPU	256GB RAM
+# system(paste0("cp -r /home/gittmp/* ", getwd()))
 
 
 # 

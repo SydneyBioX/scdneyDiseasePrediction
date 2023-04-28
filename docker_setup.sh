@@ -17,12 +17,11 @@ git clone https://github.com/SydneyBioX/scdneyDiseasePrediction /home/gittmp/
 #wget https://storage.googleapis.com/scp_data/data.zip -P /home/gittmp/
 mkdir /home/gittmp/toy_data
 wget https://www.dropbox.com/s/rw7q7b6h4z669t1/schulte_12patients.rds -P /home/gittmp/toy_data
-wget https://www.dropbox.com/s/os9guj1vur7d39l/wilk_12patient.rds -P /home/gittmp/toy_data
+wget https://www.dropbox.com/s/jmxczw6upquu2rs/wilk_12patients.rds -P /home/gittmp/toy_data
 
 mkdir /home/gittmp/intermediate_result
 wget https://www.dropbox.com/s/plqxtrudhlsp1n8/scfeatures_result_schulte_12patients.rds -P /home/gittmp/intermediate_result
 wget https://www.dropbox.com/s/z614phwezuz3su6/scfeatures_result_wilk_12patients.rds -P /home/gittmp/intermediate_result
-wget https://www.dropbox.com/s/fphn9b8q5ggdirw/result_list_generalisability.rds -P /home/gittmp/intermediate_result
 wget https://www.dropbox.com/s/qzsnybe3h8l88ta/classifyr_result_naivebayes.rds -P /home/gittmp/intermediate_result
 wget https://www.dropbox.com/s/tt9jc7vkctgqbkq/classifyr_result_knn.rds -P /home/gittmp/intermediate_result
 #wget https://www.dropbox.com/s/91bhx4a2jwj2i63/sce_DentateGyrus_hippocampus.rds -P /home/gittmp/data

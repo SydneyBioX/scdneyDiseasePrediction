@@ -170,8 +170,7 @@ Is there any sample or cell types you should remove from the data?
 
 
 
-scFeatures also has a built-in function `process_data`, that removes "small samples", in which the sample has less than 10 cells for every cell type, as well as "small cell types", in which the cell type has less than 10 cells for every sample. 
-
+scFeatures also has a built-in function `process_data`, that removes "small samples", in which the sample has less than 10 cells for every cell type. 
 
 
 ```{r}
@@ -196,6 +195,13 @@ table(data$celltype)
 After running the `process_data` function, are there still any patient samples or cell types that you should remove from the data?
 
 </div>
+
+
+
+```{r}
+# remove MAST, DN, ILC, HSPC, RBC 
+data <- data[, -c(which( data$celltype %in% c("MAST", "DN", "ILC", "HSPC", "RBC")))]
+```
 
 
 ### 3.1 Creating molecular representations of patients
@@ -464,9 +470,12 @@ counts <- apply(data_list  == "Mild/Moderate", 1, sum)
 # calculate the percentage of times each row is labeled as "Mild/Moderate"
 percentages <- counts / ncol(data_list) * 100
  
-consistency <- data.frame(patient = classifyr_result[[1]]@originalNames  , 
+patient <- unlist ( lapply ( strsplit ( classifyr_result[[1]]@originalNames, "_cond_")  , `[` , 1) )
+condition <-  unlist ( lapply ( strsplit ( classifyr_result[[1]]@originalNames, "_cond_")  , `[` , 2) )
+consistency <- data.frame(patient = patient  ,
+                          condition = condition, 
                           percentages_mildmoderate = percentages )
- 
+rownames(consistency) <- NULL 
 consistency
 ```
 
@@ -587,7 +596,8 @@ Generalisable means whether the model can have good performance when tested on a
 Here, we use the model built on the Schulte-Schrepping dataset to test on the Wilk dataset. The Wilk data is obtained from  [Wilk et al. 2022](https://rupress.org/jem/article/218/8/e20210582/212379/Multi-omic-profiling-reveals-widespread). We sampled 12 patients with mild/moderate and severe/critical conditions.  
 
 ```{r}
-data <- readRDS("~/toy_data/wilk_full.rds")
+data <- readRDS("~/toy_data/wilk_12patients.rds")
+
 ```
 
 
@@ -611,25 +621,27 @@ DimPlot(data, reduction = "umap", group.by = "meta_severity")
 # Here we label the samples using the severity, such as it is easier later on to retrieve the severity outcomes of the samples. 
 data$sample <- paste0(data$sample, "_cond_" , data$meta_severity)
 
+data <- process_data(data)
 
-start <- Sys.time()
+table(data$celltype)
+table(data$sample)
+
+
+data <- data[, -c(which(data$sample %in% c("ED_084_PBMC_cond_Severe/Critical",
+                                           "Imm_006_ACK_cond_Mild/Moderate"))) ]
+data <- data[, -c(which(data$celltype %in% c("DC", "DN", "gdT",  "HSPC" , "MAIT" , "MAST", "RBC")))]
+ 
 scfeatures_result_wilk <- scFeatures(data, ncores = 12)
-finish <- Sys.time()
 
-scfeatures_result_schulte <- scfeatures_result
 ```
 
-
-
-
-
+ 
 
 Here we have provided the constructed scFeatures result for the Wilk dataset. 
 
 ```{r}
 
 scfeatures_result_schulte <- readRDS("~/intermediate_result/scfeatures_result_schulte_12patients.rds")
-
 
 scfeatures_result_wilk <- readRDS("~/intermediate_result/scfeatures_result_wilk_12patients.rds" )
 
@@ -665,7 +677,7 @@ names(outcome_wilk) <- rownames(scfeatures_result_wilk[[1]])
 First, we use the dataset from Schulte-Schrepping to perform self cross-validation. The purpose is to identify the best model (the best parameters). Once we decide on the best model, we then use this model to test on the Wilk dataset. 
 
 
-```{r eval=FALSE}
+```{r }
 # First clean the column names
 for(i in 1:length(new_scfeatures_result_schulte)){
   names(new_scfeatures_result_schulte[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_schulte[[i]]))
@@ -684,10 +696,11 @@ result_generalisability <- NULL
 for( i in c(1:length( new_scfeatures_result_schulte )) ){
 
   model <- train(x = new_scfeatures_result_schulte[[i]] ,outcomeTrain = outcome_schulte,
-                 performanceType = "Balanced Accuracy", classifier =  "naiveBayes" )
+                 performanceType = "Balanced Accuracy", classifier =  "DLDA" )
   prediction  <- predict( model , new_scfeatures_result_wilk[[i]])
-  truth <-  outcome_wilk[names(prediction)]
-  temp <- calcExternalPerformance( factor(truth) , prediction,
+  truth <-  outcome_wilk[rownames(prediction)]
+  prediction <- ifelse(prediction$`Mild/Moderate` > 0.5, "Mild/Moderate", "Severe/Critical" )
+  temp <- calcExternalPerformance( factor(truth) , factor(prediction),
                                    performanceType = c("Balanced Accuracy"))
   temp <- data.frame(balanced_accuracy = temp,
                      featuretype = names(new_scfeatures_result_schulte)[[i]] )
@@ -702,15 +715,13 @@ for( i in c(1:length( new_scfeatures_result_schulte )) ){
 Visualise the accuracy using boxplots.  
 
 ```{r}
-
-result_list_generalisability <- readRDS("~/intermediate_result/result_list_generalisability.rds")
-
-result_list_generalisability$balanced_accuracy <- round( result_list_generalisability$balanced_accuracy, 2)
+ 
+result_generalisability$balanced_accuracy <- round( result_generalisability$balanced_accuracy, 2)
 
 
-result_list_generalisability$featuretype <- factor(  result_list_generalisability$featuretype , levels = c( result_list_generalisability$featuretype))
+result_generalisability$featuretype <- factor(  result_generalisability$featuretype , levels = c( result_generalisability$featuretype))
 
-ggplot( result_list_generalisability, aes(x = featuretype , y = balanced_accuracy, fill = featuretype ) ) + geom_col()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(0,1) + scale_fill_tableau(palette = "Tableau 20") +
+ggplot( result_generalisability, aes(x = featuretype , y = balanced_accuracy, fill = featuretype ) ) + geom_col()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(0,1) + scale_fill_tableau(palette = "Tableau 20") +
   geom_text(aes(label = balanced_accuracy), vjust = -0.5)
 
 ```
