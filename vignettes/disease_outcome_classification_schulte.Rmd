@@ -102,7 +102,7 @@ set.seed(2022)
 ### 2.2 Loading the preprocessed data
 
 We will use a single-cell RNA-sequencing (scRNA-seq) data of COVID-19 patients for this workshop. 
-The dataset is taken from [Schulte-Schrepping et al. 2020](https://pubmed.ncbi.nlm.nih.gov/32810438/). We have subsampled 12 patient samples from this dataset, with the condition being mild/moderate and severe/critical. The original data can be accessed from the European Genome-phenome Archive (EGA) with the accession number EGAS00001004571.   
+The dataset is taken from [Schulte-Schrepping et al. 2020](https://pubmed.ncbi.nlm.nih.gov/32810438/). We have subsampled 12 patient samples (5 mild/moderate and 7 severe/critical) from this dataset, with the condition being mild/moderate and severe/critical. The original data can be accessed from the European Genome-phenome Archive (EGA) with the accession number EGAS00001004571.   
 
 ```{r}
 data <-  readRDS("~/toy_data/schulte_12patients.rds")
@@ -115,13 +115,21 @@ We can visualise the data using dimensionality reduction approaches and colour t
 
 ```{r fig.height=6, fig.width=12}
 
-data <- NormalizeData( data)
+# here we use the standard data processing pipelines from Seurat
+# you read about the details of each function by typing question marks, e.g., "?NormalizeData"
+data <- NormalizeData( data) # log transform the data
 
-data <-  FindVariableFeatures(data )  
-data <- ScaleData(data, features = rownames(data) )
-data <- RunPCA(data)
+data <-  FindVariableFeatures(data )   # find variable features for dimension reduction 
+data <- ScaleData(data, features = rownames(data) ) # scale the data and center the data for dimension reduction 
+
+# run PCA
+data <- RunPCA(data, verbose = FALSE) #here, we use verbose = FALSE to suppress the text output 
+
+# run clustering 
 data <- FindNeighbors(data, dims = 1:10)
-data <- FindClusters(data, resolution = 0.5)
+data <- FindClusters(data) 
+
+# run UMAP
 data  <- RunUMAP(data , dims = 1:10)
 DimPlot(data, reduction = "umap", group.by = "meta_severity") + DimPlot(data, reduction = "umap", group.by = "sample")
 
@@ -216,6 +224,7 @@ Given that this step may take up to 20 minutes, we have already generated the re
 # Here we label the samples using the severity, such as it is easier later on to retrieve the severity outcomes of the samples. 
 data$sample <- paste0(data$sample, "_cond_" , data$meta_severity)
 
+# scfeatures uses the log normalised data
 scfeatures_result <- scFeatures(data, ncores = 12)
 
 ```
@@ -243,6 +252,9 @@ Once the features are generated, you may wish to visually explore the features. 
 
 ```{r}
 data <- scfeatures_result$gene_mean_celltype
+# this transposes the data
+# in bioinformatics conversion, features are stored in rows 
+# in statistics convention, features are stored in columns
 data <- t(data)
       
 # pick CD14 Mono as an example cell type 
@@ -314,9 +326,9 @@ We will build a classification model for each feature type.
 
 # First clean the column names
 for(i in 1:length(scfeatures_result)){
-  names(scfeatures_result[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(scfeatures_result[[i]]))
+  names(scfeatures_result[[i]]) <-  make.names(names(scfeatures_result[[i]]))
 }
-
+ 
 # obtain the patient outcome, which is stored in the rownames of each matrix 
 outcome = scfeatures_result[[1]] %>% rownames %>% strsplit("_cond_") %>% sapply(function(x) x[2])
 
@@ -351,13 +363,7 @@ Format the output and visualise the accuracy using boxplots.
 
 ```{r}
 
-accuracy <- data.frame( lapply(classifyr_result, performance) )
-
-colnames(accuracy ) <- unlist( lapply ( strsplit( names(classifyr_result) , "\\." ), `[` , 1))
-
-accuracy <- reshape2::melt(accuracy)
-
-accuracy_knn_balanced_accuracy  <- ggplot(accuracy, aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy")+ ylim(0,1)
+accuracy_knn_balanced_accuracy  <- performancePlot(classifyr_result) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) # make the x-axis label 45 degree so it's easier to read 
 
 accuracy_knn_balanced_accuracy
 
@@ -453,7 +459,7 @@ Explore the ranks of the features. Which cell type(s) would you like to focus on
 
 Given we build prediction model for each of the feature type, we can examine whether the prediction from each feature type is consistent. 
 
-```{r}
+```{r fig.height=10, fig.width=10}
  
 # looking at one repeat 
 data_list <- lapply( 1:13 , function(i) {
@@ -480,6 +486,9 @@ consistency <- data.frame(patient = patient  ,
                           percentages_mildmoderate = percentages )
 rownames(consistency) <- NULL 
 consistency
+
+# can also do it visually in one line via the function: 
+samplesMetricMap(classifyr_result)
 ```
 
 
@@ -532,30 +541,9 @@ Compare the accuracy obtained from the different algorithms.
 
 ```{r}
 
-
-format_accuracy <- function(result_list, performanceType = "Balanced Accuracy"){
-  
-  result_list <- lapply(result_list, function(x) calcCVperformance(x, performanceType = performanceType ))
-  
-  accuracy <- lapply(result_list, performance)
-  accuracy  <- lapply(accuracy , `[`, performanceType)
-  accuracy <- data.frame( accuracy  )
-  
-  colnames(accuracy ) <- unlist( lapply ( strsplit( names(result_list) , "\\." ), `[` , 1))
-  
-  accuracy <- reshape2::melt(accuracy)
-  
-  return(accuracy)
-}
-
-
-
-
 classifyr_result <- readRDS("~/intermediate_result/classifyr_result_naivebayes.rds")
-
-accuracy <- format_accuracy(classifyr_result  )
-
-accuracy_naivebayes_balanced_accuracy <- ggplot(accuracy , aes(x = variable, y = value )) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Balanced Accuracy") + ylim(0,1)
+ 
+accuracy_naivebayes_balanced_accuracy <- performancePlot(classifyr_result) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 accuracy_naivebayes_balanced_accuracy
 
@@ -569,9 +557,7 @@ Here we calculate accuracy instead of balanced accuracy. Inspect the difference 
 
 ```{r}
 
-accuracy <- format_accuracy(classifyr_result , performanceType = "Accuracy")
-
-accuracy_naivebayes_accuracy  <- ggplot(accuracy , aes(x = variable, y = value)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + xlab("Feature types") + ylab("Accuracy")+ ylim(0,1)
+accuracy_naivebayes_accuracy  <- performancePlot(classifyr_result , metric ="Accuracy" ) + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
 
 accuracy_naivebayes_accuracy 
 
@@ -676,19 +662,19 @@ names(outcome_wilk) <- rownames(scfeatures_result_wilk[[1]])
 
 ```
 
-First, we use the dataset from Schulte-Schrepping to perform self cross-validation. The purpose is to identify the best model (the best parameters). Once we decide on the best model, we then use this model to test on the Wilk dataset. 
-
+ 
+Building the model on Schulte-Schrepping dataset features and testing on the Wilk dataset.   
 
 ```{r }
 # First clean the column names
 for(i in 1:length(new_scfeatures_result_schulte)){
-  names(new_scfeatures_result_schulte[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_schulte[[i]]))
+  names(new_scfeatures_result_schulte[[i]]) <-  make.names( names(new_scfeatures_result_schulte[[i]]) )
 }
 
 
 # First clean the column names
 for(i in 1:length(new_scfeatures_result_wilk)){
-  names(new_scfeatures_result_wilk[[i]]) <- gsub("\\s|[[:punct:]]", ".", names(new_scfeatures_result_wilk[[i]]))
+  names(new_scfeatures_result_wilk[[i]]) <-  make.names( names(new_scfeatures_result_wilk[[i]]) )
 }
 
  
