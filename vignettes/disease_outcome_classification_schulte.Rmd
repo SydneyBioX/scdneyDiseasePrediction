@@ -17,8 +17,7 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   warning = FALSE,
   message = FALSE,
-  comment = "#>",
-  root.dir = "~/Dropbox (Sydney Uni)/Yue Cao Home Content/Github_push/scdneyDieasePrediction/vignettes"
+  comment = "#>"
 )
 set.seed(2022)
 ```
@@ -147,7 +146,7 @@ Are the cells from mild/moderate and severe/critical patients easy or difficult 
 </div>
 
 
-## 3. How can I characterise each individual as a whole from the matrix of genes x cells ?
+## 3. What insights can we gain from the molecular profiles of patients to better understand about the patients? 
 
 
 In this workshop, we use [scFeatures](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btac590/6678979) to generate molecular representation for each patient. The molecular representation is interpretable and hence facilitates downstream analysis of the patient. Overall, scFeatures generates features across six categories representing different molecular views of cellular characteristics. These include:    
@@ -159,10 +158,8 @@ In this workshop, we use [scFeatures](https://academic.oup.com/bioinformatics/ad
 - vi) spatial metrics    
 The different types of features constructed enable a more comprehensive multi-view understanding of each patient from a matrix of genes x cells. 
 
-
-
-![](~/docs/articles/figure/scFeatures_overview.png)
-
+ 
+ 
 ### 3.1 Checking the data
 
 Inspect the number of cells in each patient sample, as well as the number of cells in each cell type. 
@@ -178,20 +175,14 @@ Is there any sample or cell types you should remove from the data?
 </div>
 
 
-
-scFeatures also has a built-in function `process_data`, that removes "small samples", in which the sample has less than 10 cells for every cell type. 
-
+ 
 
 ```{r}
 
 table(data$sample)
 table(data$celltype)
 
-data <- process_data(data)
-
-table(data$sample)
-table(data$celltype)
-
+ 
 ```
 
 
@@ -217,7 +208,7 @@ data <- data[, -c(which( data$celltype %in% c("MAST", "DN", "ILC", "HSPC", "RBC"
 
 All the feature types can be generated in one line of code. This runs the function using default settings for all parameters, for more information, type `?scFeatures`. 
 
-Given that this step may take up to 20 minutes, we have already generated the result and saved it in the     `intermediate_result` folder. You could skip this step and proceed to the next step for the purposes of this workshop. 
+Given that this step may take up to 20 minutes, we have already generated the result and saved it in the `intermediate_result` folder. You could skip this step and proceed to the next step for the purposes of this workshop. 
 
 ```{r eval=FALSE}
 
@@ -225,7 +216,7 @@ Given that this step may take up to 20 minutes, we have already generated the re
 data$sample <- paste0(data$sample, "_cond_" , data$meta_severity)
 
 # scfeatures uses the log normalised data
-scfeatures_result <- scFeatures(data, ncores = 12)
+scfeatures_result <- scFeatures(data  = data@assays$RNA@data , sample = data$sample, celltype = data$celltype , ncores = 12)
 
 ```
 
@@ -308,7 +299,7 @@ Using the HTML, we can look at some of the critical thinking questions that a re
 
 
 
-## 4. How can I perform disease outcome classification using the molecular representation of patients? 
+## 4. How can I leverage the molecular representation of patients to classify disease outcome? 
 
 Now that we have generated the patient representation, in this section we will examine a useful case study of using the representation to perform disease outcome classification.  
 
@@ -316,9 +307,8 @@ Now that we have generated the patient representation, in this section we will e
 ### 4.1 Building classification model 
 
 In this workshop we use the [classifyR](https://academic.oup.com/bioinformatics/article/31/11/1851/2365648?login=false) package to build a classification model. It provides an implementation of a typical framework for classification, including a function that performs repeated cross-validation with one line of code. 
-
-![](~/docs/articles/figure/classifyR_overview.png)
-
+ 
+ 
 We will build a classification model for each feature type.  
 
 
@@ -504,7 +494,7 @@ Would ensemble learning using all feature types improve prediction performance c
 
 
 
-## 5. Is the constructed model robust for disease outcome classification? 
+## 5. How do we ensure the model reliably predicts disease outcome ? 
 
 In this section we take a detailed look at the model performance. In particular, a number of factors may affect the classification performance, such as the choice of classification algorithm. 
 
